@@ -1,0 +1,3 @@
+这是一些基于langchain和langgraph的agent开发项目
+在production_projects中的项目使用了生产级的技术
+例如，在chat_bot中使用了postgresql作为存储agent记忆的数据库，并使用了连接池保证数据库连接的安全性；使用了Token裁剪器确保不会爆token；加入了异步操作保证推理服务的并发量
