@@ -3,3 +3,6 @@ langgraph
 langchain_tavily
 dotenv
 langchain_openai
+uvicorn
+fastapi
+pydantic_settings
