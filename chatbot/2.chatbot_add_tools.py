@@ -81,10 +81,10 @@ def stream_graph_updates(user_input: str):
             HumanMessage(content = user_input),
         ]}
     ):
-        for value in event.values():
+        for node in event.values():
             # value is the state after each node finishes
-            if "messages" in value and value["messages"]:
-                print("Chat_bot: ", value["messages"][-1].content)
+            if "messages" in node and node["messages"]:
+                print("Chat_bot: ", node["messages"][-1].content)
 
 if __name__ == "__main__":
     graph = create_chat_bot_with_tools("gpt-4o-mini")
