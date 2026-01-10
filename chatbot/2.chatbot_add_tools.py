@@ -1,6 +1,6 @@
 from langchain_tavily import TavilySearch
 from dotenv import load_dotenv
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import os
 import json
@@ -14,14 +14,14 @@ search_tool = TavilySearch(max_results = 2)
 tools = [search_tool]
 
 class State(TypedDict):
-    message : Annotated[list, add_messages]
+    messages: Annotated[list, add_messages]
 
 class BasicToolNode:
 
     def __init__(self, tools: list) -> None:
         self.tool_by_name = {tool.name : tool for tool in tools}
     def __call__(self, state):
-        if messages := state.get("message", []):
+        if messages := state.get("messages", []):
             message = messages[-1]
         else:
             raise ValueError("No message found in input")
@@ -34,10 +34,10 @@ class BasicToolNode:
                 ToolMessage(
                     content = json.dumps(tool_result),
                     name = tool_call["name"],
-                    tool_cal_id = tool_call["id"],
+                    tool_call_id = tool_call["id"],
                 )
             )
-        return {"messages", outputs}
+        return {"messages": outputs}
     
 def create_chat_bot_with_tools(model_name) -> StateGraph:
     system_prompt = SystemMessage(content = "你是一个聊天机器人")
@@ -51,19 +51,50 @@ def create_chat_bot_with_tools(model_name) -> StateGraph:
 
     def chat_bot_node(state):
         prompt = [system_prompt] + state["messages"]
-        return {"messages" : llm.invoke(prompt)}
+        return {"messages": [llm.invoke(prompt)]}
     
     workflow = StateGraph(State)
     workflow.add_node("chat_bot", chat_bot_node)
     workflow.add_edge(START, "chat_bot")
-    workflow.add_edge("chat_bot", END)
     tool_node = BasicToolNode(tools = tools)
     workflow.add_node("tools", tool_node)
+    workflow.add_conditional_edges("chat_bot", route_tools, {"tools": "tools", END: END})
+    workflow.add_edge("tools", "chat_bot")
     return workflow.compile()
 
+def route_tools(
+    state: State,
+):
+    if isinstance(state, list):
+        ai_message = state[-1]
+    elif messages := state.get("messages", []):
+        ai_message = messages[-1]
+    else:
+        raise ValueError("No messsage is found")
+    if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+        return "tools"
+    return END
+
+def stream_graph_updates(user_input: str):
+    for event in graph.stream(
+        {"messages" : [
+            HumanMessage(content = user_input),
+        ]}
+    ):
+        for value in event.values():
+            # value is the state after each node finishes
+            if "messages" in value and value["messages"]:
+                print("Chat_bot: ", value["messages"][-1].content)
 
 if __name__ == "__main__":
     graph = create_chat_bot_with_tools("gpt-4o-mini")
-    png_data = graph.get_graph().draw_mermaid_png()
-    with open("graph_with_tools.png", "wb") as f:
-        f.write(png_data)
+    
+    while True:
+        try:
+            user_input = input("Usr: ")
+            if(user_input.lower() in ["q", "quit", "exit"]):
+                print("Goodbye!")
+                break
+            stream_graph_updates(user_input)
+        except Exception as e:
+            raise RuntimeError(f"运行失败: {e}") from e
