@@ -18,8 +18,9 @@ from langchain_core.tools import tool
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from langgraph.types import interrupt
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver # 注意这里是 aio (Async IO)
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 # --- 数据库驱动 ---
 from psycopg_pool import AsyncConnectionPool
@@ -66,8 +67,13 @@ search_tool = TavilySearch(
     max_results = 5
 )
 
+@tool
+def human_assistance(query: str) -> str:
+    human_response = interrupt({"query": query})
+    return human_response["data"]
+
 #初始化工具调用
-tools = [search_tool]
+tools = [search_tool, human_assistance]
 tool_node = ToolNode(tools)
 
 #初始化模型
@@ -167,7 +173,7 @@ async def chat_endpoint(req: ChatRequest):
                         if latest_msg.content:
                             yield f"data: {json.dumps({'type' : 'content', 'payload' : latest_msg.content}, ensure_ascii = False)}\n\n"
                         if latest_msg.tool_calls:
-                            yield f"data: {jsondumps({'type' : 'status', 'payload' : 'Calling tools...'}, ensure_ascii = False)}\n\n"
+                            yield f"data: {json.dumps({'type' : 'status', 'payload' : 'Calling tools...'}, ensure_ascii = False)}\n\n"
                     elif node_name == "tools":
                         yield f"data: {json.dumps({'type' : 'status', 'payload' : 'Tool execution finished.'}, ensure_ascii = False)}\n\n"
             yield "data: [DONE]\n\n"

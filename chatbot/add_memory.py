@@ -9,9 +9,16 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from langchain_tavily import TavilySearch
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import interrupt, Command
+from langchain_core.tools import tool
 load_dotenv()
 
 memory = InMemorySaver()
+
+@tool
+def human_assistance(query: str) -> str:
+    human_response = interrupt({"query": query})
+    return human_response["data"]
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
@@ -39,7 +46,7 @@ class BasicToolNode():
         return {"messages": outputs}
 
 search_tool = TavilySearch(max_results = 3)
-tools = [search_tool]
+tools = [search_tool, human_assistance]
 tool_node = BasicToolNode(tools = tools)
 system_prompt = SystemMessage(content = "你是一个聊天机器人")
 
